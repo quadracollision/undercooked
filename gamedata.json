@@ -1,31 +1,113 @@
 {
     "ingredients": {
         "onion": {
-            "color_raw": [255, 165, 0],
-            "color_chopped": [255, 200, 100],
-            "color_cooked": [160, 82, 45],
-            "color_burnt": [50, 50, 50],
+            "color_raw": [
+                255,
+                165,
+                0
+            ],
+            "color_chopped": [
+                255,
+                200,
+                100
+            ],
+            "color_cooked": [
+                160,
+                82,
+                45
+            ],
+            "color_burnt": [
+                50,
+                50,
+                50
+            ],
             "prepare_time": 180,
             "cook_time": 300,
             "burn_time": 400,
-            "crate_color": [200, 150, 100] 
+            "crate_color": [
+                200,
+                150,
+                100
+            ]
         },
         "tomato": {
-            "color_raw": [255, 0, 0],
-            "color_chopped": [200, 50, 50],
-            "color_cooked": [150, 0, 0],
-            "color_burnt": [50, 50, 50],
+            "color_raw": [
+                255,
+                0,
+                0
+            ],
+            "color_chopped": [
+                200,
+                50,
+                50
+            ],
+            "color_cooked": [
+                150,
+                0,
+                0
+            ],
+            "color_burnt": [
+                50,
+                50,
+                50
+            ],
             "prepare_time": 120,
             "cook_time": 200,
             "burn_time": 300,
-            "crate_color": [150, 100, 100]
+            "crate_color": [
+                150,
+                100,
+                100
+            ]
+        },
+        "hamburger": {
+            "container_type": "pan",
+            "prepare_time": 100,
+            "cook_time": 100,
+            "burn_time": 100,
+            "color_raw": [
+                212,
+                44,
+                59
+            ],
+            "color_chopped": [
+                212,
+                44,
+                16
+            ],
+            "color_cooked": [
+                150,
+                100,
+                50
+            ],
+            "color_burnt": [
+                50,
+                50,
+                50
+            ],
+            "crate_color": [
+                100,
+                100,
+                100
+            ]
         }
     },
     "recipes": {
         "onion_soup": {
-            "ingredients": ["onion", "onion", "onion"],
+            "ingredients": [
+                "onion",
+                "onion",
+                "onion"
+            ],
             "container": "pot",
             "cook_time": 500
+        },
+        "tomato_soup": {
+            "ingredients": [
+                "tomato",
+                "tomato",
+                "tomato"
+            ]
         }
     }
 }
