@@ -1,0 +1,32 @@
+{
+    "ingredients": {
+        "onion": {
+            "color_raw": [255, 165, 0],
+            "color_chopped": [255, 200, 100],
+            "color_cooked": [160, 82, 45],
+            "color_burnt": [50, 50, 50],
+            "prepare_time": 180,
+            "cook_time": 300,
+            "burn_time": 400
+        },
+        "tomato": {
+            "color_raw": [255, 0, 0],
+            "color_chopped": [200, 50, 50],
+            "color_cooked": [150, 0, 0],
+            "color_burnt": [50, 50, 50],
+            "prepare_time": 120,
+            "cook_time": 200,
+            "burn_time": 300
+        }
+    },
+    "stations": {
+        "cutting_board": {
+            "type": "active",
+            "interaction": "chop"
+        },
+        "stove": {
+            "type": "passive",
+            "interaction": "cook"
+        }
+    }
+}
