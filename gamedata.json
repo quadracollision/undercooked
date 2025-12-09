@@ -7,7 +7,8 @@
             "color_burnt": [50, 50, 50],
             "prepare_time": 180,
             "cook_time": 300,
-            "burn_time": 400
+            "burn_time": 400,
+            "crate_color": [200, 150, 100] 
         },
         "tomato": {
             "color_raw": [255, 0, 0],
@@ -16,17 +17,15 @@
             "color_burnt": [50, 50, 50],
             "prepare_time": 120,
             "cook_time": 200,
-            "burn_time": 300
+            "burn_time": 300,
+            "crate_color": [150, 100, 100]
         }
     },
-    "stations": {
-        "cutting_board": {
-            "type": "active",
-            "interaction": "chop"
-        },
-        "stove": {
-            "type": "passive",
-            "interaction": "cook"
+    "recipes": {
+        "onion_soup": {
+            "ingredients": ["onion", "onion", "onion"],
+            "container": "pot",
+            "cook_time": 500
         }
     }
 }
