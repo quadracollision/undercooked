@@ -108,6 +108,11 @@
                 "tomato",
                 "tomato"
             ]
+        },
+        "hamburger plate": {
+            "ingredients": [
+                "hamburger"
+            ]
         }
     }
 }

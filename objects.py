@@ -1,6 +1,7 @@
 import pygame
 import json
 import os
+import random
 
 # --- Load Data from JSON ---
 GAME_DATA = {}
@@ -39,7 +40,6 @@ class PhysicsEntity(pygame.sprite.Sprite):
             hits = pygame.sprite.spritecollide(self, walls, False)
             if hits:
                 target = hits[0]
-                # Only land if counter is empty
                 if target.held_item is None:
                     self.snap_to_counter(target)
 
@@ -80,7 +80,6 @@ class Ingredient(PhysicsEntity):
                 self.image.fill(self.colors["chopped"])
                 pygame.draw.line(self.image, (255, 255, 255), (10, 0), (10, 20), 2)
         else:
-            # print(f"DEBUG: Cannot chop! Item state is: {self.state}")
             pass
 
     def cook_tick(self):
@@ -161,18 +160,16 @@ class Pot(Container):
         if ingredient.state == "chopped":
             current_count = len(self.contents)
             
-            # Weighted Average Logic:
-            # If pot is hot, adding a raw item cools it down proportionally
+            # Weighted Average Logic
             if current_count > 0 and self.cooking_progress > 0:
                 total_heat = self.cooking_progress * current_count
                 self.cooking_progress = int(total_heat / (current_count + 1))
                 
-                # If we dropped below threshold, we are no longer ready
                 if self.food_ready:
                     print("DEBUG: Pot rescued from burning!")
                     self.food_ready = False
-                    self.burn_progress = 0 # Reset burn meter
-                    self.image.fill((50, 50, 50)) # Visual reset
+                    self.burn_progress = 0 
+                    self.image.fill((50, 50, 50)) 
 
             self.contents.append(ingredient.name)
             print(f"DEBUG: Added {ingredient.name} to Pot. Total: {len(self.contents)}")
@@ -273,15 +270,55 @@ class Pan(Container):
 class Plate(Container):
     def __init__(self, x, y):
         self.image = pygame.Surface((30, 30))
+        self.font = pygame.font.SysFont("Arial", 20, bold=True)
+        super().__init__("plate", x, y)
+        
+        self.is_dirty = False
+        self.stack_count = 1
+        
+        # Initial draw
+        self.redraw_plate()
+
+    def redraw_plate(self):
+        # Reset canvas
         self.image.fill((255, 255, 255)) # White
         pygame.draw.circle(self.image, (200, 200, 200), (15, 15), 12, 1)
         
-        super().__init__("plate", x, y)
+        if self.is_dirty:
+            # Draw smudge
+            pygame.draw.circle(self.image, (100, 150, 100), (15, 15), 10)
+        elif len(self.contents) > 0:
+            # Draw food
+            pygame.draw.circle(self.image, (160, 82, 45), (15, 15), 8)
 
-    def add_food(self, food_name):
-        self.contents.append(food_name)
-        # Visual change
-        pygame.draw.circle(self.image, (160, 82, 45), (15, 15), 8)
+        # Draw Stack Number
+        if self.stack_count > 1:
+            pygame.draw.circle(self.image, (255, 0, 0), (22, 8), 8)
+            text = self.font.render(str(self.stack_count), True, (255, 255, 255))
+            self.image.blit(text, (18, 0))
+
+    def add_food(self, content_data):
+        """
+        Accepts either a string (single item) or a list (from pot).
+        """
+        if self.is_dirty or self.stack_count > 1: return
+        
+        if isinstance(content_data, list):
+            self.contents.extend(content_data)
+        else:
+            self.contents.append(content_data)
+            
+        self.redraw_plate()
+
+    def make_dirty(self):
+        self.is_dirty = True
+        self.contents = []
+        self.redraw_plate()
+
+    def clean(self):
+        self.is_dirty = False
+        self.contents = []
+        self.redraw_plate()
 
 # --- STATION OBJECTS ---
 
@@ -339,7 +376,6 @@ class Stove(Counter):
             self.held_item.cook_tick()
 
     def draw_progress_bar(self, screen):
-        # Works for both Pots and Pans
         if self.held_item and isinstance(self.held_item, Container):
             container = self.held_item
             
@@ -360,7 +396,83 @@ class Stove(Counter):
                 pygame.draw.rect(screen, (0,0,0), (self.rect.x + 5, self.rect.y - 10, 30, 5))
                 pygame.draw.rect(screen, color, (self.rect.x + 5, self.rect.y - 10, 30 * pct, 5))
 
-# --- GENERIC CRATE CLASS ---
+class ServingCounter(Counter):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        
+        # Visuals: Finish Line
+        self.image_normal.fill((50, 50, 50)) 
+        pygame.draw.rect(self.image_normal, (200, 200, 200), (0, 0, 20, 20))
+        pygame.draw.rect(self.image_normal, (200, 200, 200), (20, 20, 20, 20))
+        
+        self.image_highlight = self.image_normal.copy()
+        pygame.draw.rect(self.image_highlight, (255, 255, 100), (0, 0, 40, 40), 2)
+        self.image = self.image_normal
+        
+        self.pending_returns = []
+
+    def serve_plate(self):
+        # 5-10 seconds for debug (300-600 frames)
+        return_time = random.randint(300, 600) 
+        self.pending_returns.append(return_time)
+        print(f"DEBUG: Plate served! Returns in {return_time} frames.")
+
+    def update(self, items_group=None, all_sprites=None):
+        if items_group is None: return
+
+        for i in range(len(self.pending_returns) - 1, -1, -1):
+            self.pending_returns[i] -= 1
+            
+            if self.pending_returns[i] <= 0:
+                # Timer done! Try to spawn dirty plate
+                if self.held_item is None:
+                    self.pending_returns.pop(i)
+                    
+                    plate = Plate(0, 0)
+                    plate.make_dirty()
+                    plate.snap_to_counter(self)
+                    
+                    items_group.add(plate)
+                    all_sprites.add(plate)
+                    print("DEBUG: Dirty plate returned!")
+
+class Sink(Counter):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.image_normal.fill((100, 100, 100)) # Metal
+        pygame.draw.rect(self.image_normal, (50, 150, 255), (5, 5, 30, 30)) # Water
+        
+        self.image_highlight = self.image_normal.copy()
+        pygame.draw.rect(self.image_highlight, (255, 255, 100), (0, 0, 40, 40), 2)
+        self.image = self.image_normal
+        
+        self.wash_progress = 0
+        self.wash_time_req = 150 # Frames to wash one plate
+
+    def interact_hold(self):
+        if self.held_item and isinstance(self.held_item, Plate):
+            plate = self.held_item
+            if plate.is_dirty:
+                self.wash_progress += 1
+                if self.wash_progress >= self.wash_time_req:
+                    self.wash_progress = 0
+                    
+                    if plate.stack_count > 1:
+                        plate.stack_count -= 1
+                        plate.redraw_plate()
+                        return "WASHED_STACK"
+                    else:
+                        plate.clean()
+                        return "CLEANED_SINGLE"
+        return None
+
+    def draw_progress_bar(self, screen):
+        if self.held_item and isinstance(self.held_item, Plate) and self.held_item.is_dirty:
+            pct = self.wash_progress / self.wash_time_req
+            if pct > 1: pct = 1
+            pygame.draw.rect(screen, (0,0,0), (self.rect.x + 5, self.rect.y - 10, 30, 5))
+            pygame.draw.rect(screen, (0, 200, 255), (self.rect.x + 5, self.rect.y - 10, 30 * pct, 5))
+
 class Crate(Counter):
     def __init__(self, x, y, ingredient_name):
         super().__init__(x, y)
