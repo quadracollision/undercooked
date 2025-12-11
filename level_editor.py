@@ -60,18 +60,20 @@ class DarkLevelEditor:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
 
-        # Tabs
-        self.setup_ingredient_tab()
-        self.setup_recipe_tab()
-        self.setup_container_tab()
-        self.setup_level_tab()
-
         # Temporary Color Storage
         self.current_ing_colors = {
             "color_raw": (255, 165, 0), "color_chopped": (200, 200, 200),
             "color_cooked": (150, 100, 50), "color_burnt": (50, 50, 50),
-            "crate_color": (100, 100, 100)
+            "crate_color": (100, 100, 100),
+            "proc_color": (50, 50, 50), "proc_pb_color": (0, 255, 0)
         }
+        
+        # Tabs
+        self.setup_ingredient_tab()
+        self.setup_recipe_tab()
+        self.setup_container_tab()
+        self.setup_processor_tab()
+        self.setup_level_tab()
         
         self.refresh_ui()
 
@@ -145,8 +147,8 @@ class DarkLevelEditor:
 
         ttk.Label(grid, text="Container:").grid(row=1, column=0, sticky="w", pady=5)
         self.var_ing_cont = tk.StringVar(value="pot")
-        cont_dd = ttk.Combobox(grid, textvariable=self.var_ing_cont, values=["pot", "pan"], state="readonly")
-        cont_dd.grid(row=1, column=1, sticky="ew", padx=10)
+        self.ing_cont_dd = ttk.Combobox(grid, textvariable=self.var_ing_cont, values=["pot"], state="readonly")
+        self.ing_cont_dd.grid(row=1, column=1, sticky="ew", padx=10)
 
         t_group = ttk.LabelFrame(form_frame, text="Timers (Frames)")
         t_group.pack(fill="x", padx=20, pady=10)
@@ -216,6 +218,10 @@ class DarkLevelEditor:
 
         btn_frame = ttk.Frame(b_grid)
         btn_grid = btn_frame.grid(row=1, column=1, padx=10)
+        
+        self.var_chop_opt = tk.BooleanVar()
+        ttk.Checkbutton(btn_frame, text="Chopped", variable=self.var_chop_opt).pack(pady=5)
+        
         ttk.Button(btn_frame, text="Add ->", command=self.add_to_rec).pack(pady=5)
         ttk.Button(btn_frame, text="<- Rem", command=self.rem_from_rec).pack(pady=5)
 
@@ -308,6 +314,150 @@ class DarkLevelEditor:
         self.save_json(DATA_FILE, self.data)
         self.refresh_ui()
 
+    # --- TAB: PROCESSORS ---
+    def setup_processor_tab(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="  Processors  ")
+        
+        paned = ttk.PanedWindow(frame, orient="horizontal")
+        paned.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Side List
+        side = ttk.Frame(paned, width=200)
+        ttk.Label(side, text="Processors", font=("Arial", 12, "bold")).pack(pady=5)
+        self.proc_listbox = tk.Listbox(side, bg=ENTRY_BG, fg=FG_COLOR, bd=0, highlightthickness=0, selectbackground=ACCENT_COLOR)
+        self.proc_listbox.pack(fill="both", expand=True)
+        self.proc_listbox.bind("<<ListboxSelect>>", self.on_proc_select)
+        ttk.Button(side, text="+ Create New", command=self.clear_processor_form).pack(fill="x", pady=5)
+        paned.add(side, weight=1)
+        
+        # Form
+        content = ttk.Frame(paned)
+        paned.add(content, weight=3)
+        
+        self.lbl_proc_header = ttk.Label(content, text="Creating New Processor", font=("Arial", 14, "bold"))
+        self.lbl_proc_header.pack(pady=10)
+        
+        grid = ttk.Frame(content)
+        grid.pack(fill="x", padx=20)
+        
+        ttk.Label(grid, text="Name:").grid(row=0, column=0, sticky="w", pady=5)
+        self.var_proc_name = tk.StringVar()
+        ttk.Entry(grid, textvariable=self.var_proc_name).grid(row=0, column=1, sticky="ew", padx=10)
+        
+        # Logic Section
+        l_frame = ttk.LabelFrame(content, text="Logic")
+        l_frame.pack(fill="x", padx=20, pady=10)
+        
+        ttk.Label(l_frame, text="Tick Method:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
+        self.var_proc_method = tk.StringVar(value="cook_tick")
+        ttk.Entry(l_frame, textvariable=self.var_proc_method).grid(row=0, column=1, sticky="ew", padx=10)
+        ttk.Label(l_frame, text="(e.g. cook_tick, chop_tick)").grid(row=0, column=2, sticky="w", padx=5)
+
+        ttk.Label(l_frame, text="Tick Speed:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
+        self.var_proc_speed = tk.DoubleVar(value=1.0)
+        ttk.Entry(l_frame, textvariable=self.var_proc_speed).grid(row=1, column=1, sticky="ew", padx=10)
+        ttk.Label(l_frame, text="(Multiplier, e.g. 1.0, 2.0)").grid(row=1, column=2, sticky="w", padx=5)
+
+        self.var_proc_interact = tk.BooleanVar(value=False)
+        ttk.Checkbutton(l_frame, text="Requires Active Hold (Interaction)", variable=self.var_proc_interact).grid(row=2, column=0, columnspan=3, sticky="w", padx=5, pady=5)
+
+
+        # Accepted Items (Checkboxes)
+        a_frame = ttk.LabelFrame(content, text="Accepted Containers")
+        a_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Scrollable frame for checkboxes
+        canvas = tk.Canvas(a_frame, height=150, bg=BG_COLOR, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(a_frame, orient="vertical", command=canvas.yview)
+        self.proc_cont_frame = ttk.Frame(canvas)
+        
+        self.proc_cont_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=self.proc_cont_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.proc_cont_checks = {} # Populated in refresh_ui
+
+        # Colors
+        c_frame = ttk.LabelFrame(content, text="Visuals")
+        c_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.setup_color_picker(c_frame, "Body Color", "proc_color")
+        self.setup_color_picker(c_frame, "Progress Bar", "proc_pb_color")
+
+        save_btn = tk.Button(content, text="SAVE PROCESSOR", bg=ACCENT_COLOR, fg="white", font=("Arial", 10, "bold"), relief="flat", command=self.save_processor)
+        save_btn.pack(pady=20, fill="x", padx=20)
+
+    def setup_color_picker(self, parent, label, key):
+        f = ttk.Frame(parent)
+        f.pack(fill="x", pady=2)
+        ttk.Label(f, text=label, width=15).pack(side="left")
+        btn = tk.Button(f, text="   ", width=10, relief="flat", command=lambda k=key: self.pick_color(k))
+        btn.pack(side="left")
+        self.color_btns[key] = btn
+        self.update_color_btn(key)
+
+    def on_proc_select(self, event):
+        sel = self.proc_listbox.curselection()
+        if not sel: return
+        name = self.proc_listbox.get(sel[0])
+        data = self.data.get("processors", {}).get(name, {})
+        
+        self.lbl_proc_header.config(text=f"Editing: {name}")
+        self.var_proc_name.set(name)
+        self.var_proc_method.set(data.get("process_method", "cook_tick"))
+        self.var_proc_speed.set(data.get("processing_speed", 1.0))
+        self.var_proc_interact.set(data.get("requires_interaction", False))
+        
+        # Set checkboxes
+        accepted = data.get("accepted_items", [])
+        for k, var in self.proc_cont_checks.items():
+            var.set(k in accepted)
+        
+        if "color" in data: 
+            self.current_ing_colors["proc_color"] = tuple(data["color"])
+            self.update_color_btn("proc_color")
+        if "progress_bar_color" in data:
+            self.current_ing_colors["proc_pb_color"] = tuple(data["progress_bar_color"])
+            self.update_color_btn("proc_pb_color")
+
+    def clear_processor_form(self):
+        self.lbl_proc_header.config(text="Creating New Processor")
+        self.var_proc_name.set("")
+        self.var_proc_method.set("cook_tick")
+        self.var_proc_speed.set(1.0)
+        self.var_proc_interact.set(False)
+        # Clear checkboxes
+        for var in self.proc_cont_checks.values(): var.set(False)
+        self.proc_listbox.selection_clear(0, tk.END)
+        # Reset colors
+        self.current_ing_colors["proc_color"] = (50, 50, 50)
+        self.current_ing_colors["proc_pb_color"] = (0, 255, 0)
+        self.update_color_btn("proc_color")
+        self.update_color_btn("proc_pb_color")
+
+    def save_processor(self):
+        name = self.var_proc_name.get().strip().lower()
+        if not name: return
+        
+        items = [k for k, v in self.proc_cont_checks.items() if v.get()]
+        
+        if "processors" not in self.data: self.data["processors"] = {}
+        
+        self.data["processors"][name] = {
+            "process_method": self.var_proc_method.get(),
+            "processing_speed": self.var_proc_speed.get(),
+            "requires_interaction": self.var_proc_interact.get(),
+            "accepted_items": items,
+            "color": list(self.current_ing_colors["proc_color"]),
+            "progress_bar_color": list(self.current_ing_colors["proc_pb_color"])
+        }
+        self.save_json(DATA_FILE, self.data)
+        self.refresh_ui()
+
     # --- TAB 4: LEVEL CONFIG (UPDATED) ---
     def setup_level_tab(self):
         frame = ttk.Frame(self.notebook)
@@ -392,6 +542,29 @@ class DarkLevelEditor:
         if hasattr(self, "cont_listbox"):
             self.cont_listbox.delete(0, tk.END)
             for c in conts: self.cont_listbox.insert(tk.END, c)
+            
+        if hasattr(self, "ing_cont_dd"):
+            self.ing_cont_dd['values'] = conts
+
+        # Refresh Processor Container Checkboxes
+        if hasattr(self, "proc_cont_checks"):
+             # clear old
+             for w in self.proc_cont_frame.winfo_children(): w.destroy()
+             self.proc_cont_checks = {}
+             # valid containers
+             valid_conts = ["pot", "pan", "plate"] + conts
+             valid_conts = sorted(list(set(valid_conts)))
+             
+             for c in valid_conts:
+                 var = tk.BooleanVar()
+                 chk = ttk.Checkbutton(self.proc_cont_frame, text=c, variable=var)
+                 chk.pack(anchor="w")
+                 self.proc_cont_checks[c] = var
+
+        procs = sorted(self.data.get("processors", {}).keys())
+        if hasattr(self, "proc_listbox"):
+            self.proc_listbox.delete(0, tk.END)
+            for p in procs: self.proc_listbox.insert(tk.END, p)
 
         # 2. Update Level Rows
         self.refresh_level_rows_only()
@@ -452,6 +625,16 @@ class DarkLevelEditor:
         self.var_ing_cont.set("pot")
         for var in self.vars_ing_timers.values(): var.set(100)
         self.ing_listbox.selection_clear(0, tk.END)
+        
+        # Reset colors to defaults
+        defaults = {
+            "color_raw": (255, 165, 0), "color_chopped": (200, 200, 200),
+            "color_cooked": (150, 100, 50), "color_burnt": (50, 50, 50),
+            "crate_color": (100, 100, 100)
+        }
+        for k, v in defaults.items():
+            self.current_ing_colors[k] = list(v)
+            self.update_color_btn(k)
 
     def pick_color(self, key):
         c = colorchooser.askcolor(color=self.current_ing_colors[key], title=f"Color for {key}")
@@ -497,7 +680,11 @@ class DarkLevelEditor:
 
     def add_to_rec(self):
         sel = self.list_avail.curselection()
-        if sel: self.list_in_rec.insert(tk.END, self.list_avail.get(sel[0]))
+        if sel: 
+            name = self.list_avail.get(sel[0])
+            if self.var_chop_opt.get():
+                name += "_chopped"
+            self.list_in_rec.insert(tk.END, name)
 
     def rem_from_rec(self):
         sel = self.list_in_rec.curselection()

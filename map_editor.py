@@ -20,8 +20,8 @@ POPUP_BORDER = (255, 255, 255)
 
 OBJECT_TYPES = [
     {"name": "Counter", "color": (139, 69, 19), "type_id": "counter", "layer": 0},
-    {"name": "CutBoard", "color": (240, 240, 240), "type_id": "cutting_board", "layer": 0},
-    {"name": "Stove", "color": (50, 50, 50), "type_id": "stove", "layer": 0},
+
+    {"name": "Processor", "color": (50, 50, 50), "type_id": "processor", "layer": 0},
     {"name": "Sink", "color": (50, 150, 255), "type_id": "sink", "layer": 0},
     {"name": "Serving", "color": (100, 100, 100), "type_id": "serving_counter", "layer": 0},
     {"name": "Crate", "color": (150, 150, 100), "type_id": "crate", "layer": 0}, 
@@ -46,6 +46,14 @@ def load_container_list():
             return list(data.get("containers", {}).keys())
     except: return ["pot", "pan"]
 
+def load_processor_list():
+    if not os.path.exists(DATA_FILE): return ["stove"]
+    try:
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+            return list(data.get("processors", {}).keys())
+    except: return ["stove"]
+
 class MapEditor:
     def __init__(self):
         pygame.init()
@@ -60,6 +68,7 @@ class MapEditor:
         self.item_layer = {}      
         self.available_ingredients = load_ingredient_list()
         self.container_types = load_container_list()
+        self.processor_types = load_processor_list()
 
         self.show_popup = False
         self.popup_target_pos = None 
@@ -178,6 +187,9 @@ class MapEditor:
                                 if template["type_id"] == "crate":
                                     new_obj["args"] = choice
                                     self.furniture_layer[self.popup_target_pos] = new_obj
+                                elif template["type_id"] == "processor":
+                                    new_obj["args"] = choice
+                                    self.furniture_layer[self.popup_target_pos] = new_obj
                                 elif template["type_id"] == "container":
                                     new_obj["type_id"] = choice # Switch generic to specific
                                     # Update color based on selection for immediate feedback if we had that mapping
@@ -219,6 +231,12 @@ class MapEditor:
                                         self.show_popup = True
                                         self.popup_target_pos = (grid_x, grid_y)
                                         self.current_popup_items = self.available_ingredients
+                                elif template["type_id"] == "processor":
+                                    existing = self.furniture_layer.get((grid_x, grid_y))
+                                    if not existing or existing["type_id"] != "processor":
+                                        self.show_popup = True
+                                        self.popup_target_pos = (grid_x, grid_y)
+                                        self.current_popup_items = self.processor_types
                                 else:
                                     self.furniture_layer[(grid_x, grid_y)] = template.copy()
                             elif layer == 1:

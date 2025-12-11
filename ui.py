@@ -30,25 +30,30 @@ class UIManager:
 
     def draw_selection_info(self, screen, obj, screen_h):
         # Determine name logic
+        target = obj
+        if hasattr(obj, "held_item") and obj.held_item:
+            target = obj.held_item
+
         name = "Unknown"
         details = ""
         
-        if hasattr(obj, "ingredient_name"): name = obj.ingredient_name.capitalize()
-        elif hasattr(obj, "name"): name = obj.name.capitalize()
-        elif hasattr(obj, "image_normal"): name = type(obj).__name__
+        if hasattr(target, "ingredient_name"): name = target.ingredient_name.capitalize()
+        elif hasattr(target, "type_id"): name = target.type_id.replace("_", " ").title()
+        elif hasattr(target, "name"): name = target.name.capitalize()
+        elif hasattr(target, "image_normal"): name = type(target).__name__
 
         # Show contents for containers
-        if hasattr(obj, "contents") and len(obj.contents) > 0:
+        if hasattr(target, "contents") and len(target.contents) > 0:
             # Clean up list strings
-            clean_contents = [c.replace("_", " ").capitalize() for c in obj.contents]
+            clean_contents = [c.replace("_", " ").capitalize() for c in target.contents]
             # Truncate if too long
             details_str = ", ".join(clean_contents)
             if len(details_str) > 20: details_str = details_str[:20] + "..."
             details = f" ({details_str})"
         
         # Show stack count
-        if hasattr(obj, "stack_count") and obj.stack_count > 1:
-            details += f" x{obj.stack_count}"
+        if hasattr(target, "stack_count") and target.stack_count > 1:
+            details += f" x{target.stack_count}"
 
         text = f"Selected: {name}{details}"
         

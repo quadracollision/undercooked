@@ -4,7 +4,7 @@ import json
 import os
 from player import Player
 from level import Level
-from objects import Counter, CuttingBoard, Stove, Ingredient, CookingContainer, Plate, PhysicsEntity, Crate, Container, ServingCounter, Sink
+from objects import Counter, Stove, Ingredient, CookingContainer, Plate, PhysicsEntity, Crate, Container, ServingCounter, Sink, Processor
 from orders import OrderManager
 from ui import UIManager
 
@@ -62,9 +62,12 @@ class Game:
                     if obj_type == "counter":
                         obj = Counter(x, y); self.walls.add(obj); self.all_sprites.add(obj)
                     elif obj_type == "cutting_board":
-                        obj = CuttingBoard(x, y); self.walls.add(obj); self.all_sprites.add(obj)
+                        obj = Processor(x, y, "cutting_board"); self.walls.add(obj); self.all_sprites.add(obj)
                     elif obj_type == "stove":
                         obj = Stove(x, y); self.walls.add(obj); self.all_sprites.add(obj)
+                    elif obj_type == "processor":
+                        p_type = item.get("args", "stove")
+                        obj = Processor(x, y, p_type); self.walls.add(obj); self.all_sprites.add(obj)
                     elif obj_type == "serving_counter":
                         obj = ServingCounter(x, y); self.walls.add(obj); self.all_sprites.add(obj)
                     elif obj_type == "sink":
@@ -185,7 +188,8 @@ class Game:
 
         if keys[pygame.K_e]:
             if self.selected_object:
-                if isinstance(self.selected_object, CuttingBoard): self.selected_object.interact_hold()
+                if isinstance(self.selected_object, Processor) and self.selected_object.requires_interaction:
+                    self.selected_object.interact_hold()
                 elif isinstance(self.selected_object, Sink):
                     result = self.selected_object.interact_hold()
                     if result == "WASHED_STACK":
