@@ -32,6 +32,7 @@ class OrderManager:
     def __init__(self, level_config_recipes=None):
         self.orders = []
         self.score = 0
+        self.orders_completed = 0
         self.spawn_timer = 0
         self.spawn_interval = 600 # 10 seconds
         
@@ -105,6 +106,7 @@ class OrderManager:
                 points = order.max_score + tip
                 
                 self.score += points
+                self.orders_completed += 1
                 self.orders.remove(order)
                 print(f"Order Complete! +{points} pts")
                 return True 

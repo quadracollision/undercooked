@@ -479,6 +479,9 @@ class DarkLevelEditor:
         header.pack(fill="x", padx=10, pady=5)
         tk.Button(header, text="SAVE LEVEL CONFIG", bg=SUCCESS_COLOR, fg="white", font=("Arial", 10, "bold"), relief="flat", command=self.save_level).pack(side="right")
 
+        # --- GAME CONFIG UI ---
+        self.setup_game_config_ui(frame)
+
         # --- SCROLLABLE CONTENT ---
         canvas_frame = ttk.Frame(frame)
         canvas_frame.pack(fill="both", expand=True, padx=10, pady=5)
@@ -502,6 +505,78 @@ class DarkLevelEditor:
             self.level_dd.current(0)
             self.on_level_changed(None)
 
+    def setup_game_config_ui(self, parent_frame):
+        # GAME CONFIG SECTION
+        gc_frame = ttk.LabelFrame(parent_frame, text="Game Configuration")
+        gc_frame.pack(fill="x", padx=10, pady=10)
+
+        # Mode Selection
+        m_frame = ttk.Frame(gc_frame)
+        m_frame.pack(fill="x", pady=5, padx=5)
+        ttk.Label(m_frame, text="Game Mode:", width=12).pack(side="left")
+        
+        self.var_game_mode = tk.StringVar(value="time_limit")
+        modes = ["time_limit", "order_limit", "endless"]
+        self.mode_dd = ttk.Combobox(m_frame, textvariable=self.var_game_mode, values=modes, state="readonly")
+        self.mode_dd.pack(side="left", padx=5)
+        self.mode_dd.bind("<<ComboboxSelected>>", self.update_game_config_visibility)
+
+        # Dynamic Options Frame
+        self.gc_opts_frame = ttk.Frame(gc_frame)
+        self.gc_opts_frame.pack(fill="x", pady=5, padx=5)
+
+        # -- Time Limit Vars --
+        self.var_time_limit = tk.IntVar(value=180)
+        self.var_score_1 = tk.IntVar(value=100)
+        self.var_score_2 = tk.IntVar(value=300)
+        self.var_score_3 = tk.IntVar(value=500)
+
+        # -- Order Limit Vars --
+        self.var_order_goal = tk.IntVar(value=20)
+
+        self.update_game_config_visibility()
+
+    def update_game_config_visibility(self, event=None):
+        # Clear existing
+        for w in self.gc_opts_frame.winfo_children(): w.destroy()
+        
+        mode = self.var_game_mode.get()
+        
+        if mode == "time_limit":
+            # Time Limit
+            r1 = ttk.Frame(self.gc_opts_frame)
+            r1.pack(fill="x", pady=2)
+            ttk.Label(r1, text="Time Limit (s):", width=15).pack(side="left")
+            ttk.Entry(r1, textvariable=self.var_time_limit, width=10).pack(side="left")
+
+            # Star Thresholds
+            r2 = ttk.Frame(self.gc_opts_frame)
+            r2.pack(fill="x", pady=2)
+            ttk.Label(r2, text="Score for 1 ★:", width=15).pack(side="left")
+            ttk.Entry(r2, textvariable=self.var_score_1, width=10).pack(side="left")
+
+            r3 = ttk.Frame(self.gc_opts_frame)
+            r3.pack(fill="x", pady=2)
+            ttk.Label(r3, text="Score for 2 ★:", width=15).pack(side="left")
+            ttk.Entry(r3, textvariable=self.var_score_2, width=10).pack(side="left")
+
+            r4 = ttk.Frame(self.gc_opts_frame)
+            r4.pack(fill="x", pady=2)
+            ttk.Label(r4, text="Score for 3 ★:", width=15).pack(side="left")
+            ttk.Entry(r4, textvariable=self.var_score_3, width=10).pack(side="left")
+            
+        elif mode == "order_limit":
+            r1 = ttk.Frame(self.gc_opts_frame)
+            r1.pack(fill="x", pady=2)
+            ttk.Label(r1, text="Orders Goal:", width=15).pack(side="left")
+            ttk.Label(r1, text="Orders Goal:", width=15).pack(side="left")
+            ttk.Entry(r1, textvariable=self.var_order_goal, width=10).pack(side="left")
+
+        elif mode == "endless":
+            r1 = ttk.Frame(self.gc_opts_frame)
+            r1.pack(fill="x", pady=2)
+            ttk.Label(r1, text="Endless Mode: No limits.", font=("Arial", 10, "italic")).pack(side="left")
+
     # --- LOGIC ---
 
     def update_level_list(self):
@@ -522,6 +597,19 @@ class DarkLevelEditor:
         if isinstance(self.level_data.get("recipes"), list):
             new_recs = {r: [1800, 3600] for r in self.level_data["recipes"]}
             self.level_data["recipes"] = new_recs
+            
+        # Load Game Config
+        config = self.level_data.get("config", {})
+        self.var_game_mode.set(config.get("mode", "time_limit"))
+        self.var_time_limit.set(config.get("time_limit", 180))
+        star_scores = config.get("star_thresholds", [100, 300, 500])
+        if len(star_scores) >= 3:
+            self.var_score_1.set(star_scores[0])
+            self.var_score_2.set(star_scores[1])
+            self.var_score_3.set(star_scores[2])
+        self.var_order_goal.set(config.get("order_goal", 20))
+        
+        self.update_game_config_visibility()
             
         self.refresh_level_rows_only()
 
@@ -719,6 +807,16 @@ class DarkLevelEditor:
                     return
         
         self.level_data["recipes"] = new_config
+        
+        # Save Game Config
+        game_config = {
+            "mode": self.var_game_mode.get(),
+            "time_limit": self.var_time_limit.get(),
+            "star_thresholds": [self.var_score_1.get(), self.var_score_2.get(), self.var_score_3.get()],
+            "order_goal": self.var_order_goal.get()
+        }
+        self.level_data["config"] = game_config
+
         self.save_json(self.current_level_path, self.level_data)
         messagebox.showinfo("Success", f"Saved config to {self.current_level_path}!")
 

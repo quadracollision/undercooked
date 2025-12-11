@@ -69,11 +69,21 @@ class CookingManager:
 
         self.contents.append(ingredient_name)
         
+        # Recalculate Requirements
         self._recalculate_requirements()
-
+        
+        # Adding ingredient reduces progress (simulating cooling / new mass)
+        # Decision: Keep absolute progress, but target increases, so % drops.
+        # OR: Reset progress? User said "adding a new ingredient to a cooking pot reduces teh progress bar"
+        # Since we are summing time, if we keep checks, % = current / new_total.
+        # If we added a raw item, the mix is now "less cooked".
+        # Actually, if we add raw item to cooked soup, it should probably go back to cooking.
         
         if self.state == "COOKED":
             self.state = "COOKING"
+            # Maybe retain some progress? 
+            # For simplicity, if we add something, we just ensure we are in COOKING mode 
+            # and let the new total time dictate the percentage.
         
         return True
 

@@ -517,23 +517,54 @@ class Sink(Counter):
         self.wash_time_req = 150 
 
     def interact_hold(self):
-        if self.held_item and isinstance(self.held_item, Plate):
-            plate = self.held_item
-            if plate.is_dirty:
+        if self.held_item:
+            # 1. Wash Dirty Plates
+            if isinstance(self.held_item, Plate) and self.held_item.is_dirty:
                 self.wash_progress += 1
                 if self.wash_progress >= self.wash_time_req:
                     self.wash_progress = 0
-                    if plate.stack_count > 1:
-                        plate.stack_count -= 1
-                        plate.redraw_plate()
+                    if self.held_item.stack_count > 1:
+                        self.held_item.stack_count -= 1
+                        self.held_item.redraw_plate() # Assuming redraw_plate exists or redraw
+                        # Wait, Plate has redraw(), not redraw_plate(). 
+                        # Checking Plate class... it has redraw(). 
+                        # Let me double check if redraw_plate was used in original code.
+                        # Original code line 528: `plate.redraw_plate()`
+                        # But Plate definition around line 292 shows `redraw(self)`.
+                        # It seems the original code might have had a bug or I missed a method alias.
+                        # I will use self.held_item.redraw() to be safe or keep original if it works.
+                        # Actually, looking at original file content:
+                        # Line 528: plate.redraw_plate()
+                        # Line 277-357: Plate class. Methods: __init__, redraw, add_food, add_ingredient, make_dirty, clean.
+                        # There is NO redraw_plate(). The original code has a BUG. 
+                        # I will fix this bug while I am here.
+                        self.held_item.redraw()
                         return "WASHED_STACK"
                     else:
-                        plate.clean()
+                        self.held_item.clean()
                         return "CLEANED_SINGLE"
+            
+            # 2. Wash Burnt Containers
+            elif isinstance(self.held_item, CookingContainer) and self.held_item.is_burnt:
+                self.wash_progress += 1
+                if self.wash_progress >= self.wash_time_req:
+                    self.wash_progress = 0
+                    self.held_item.is_burnt = False
+                    self.held_item.redraw()
+                    return "CLEANED_CONTAINER"
+
         return None
 
     def draw_progress_bar(self, screen):
-        if self.held_item and isinstance(self.held_item, Plate) and self.held_item.is_dirty:
+        should_draw = False
+        
+        if self.held_item:
+             if isinstance(self.held_item, Plate) and self.held_item.is_dirty:
+                 should_draw = True
+             elif isinstance(self.held_item, CookingContainer) and self.held_item.is_burnt:
+                 should_draw = True
+                 
+        if should_draw:
             pct = self.wash_progress / self.wash_time_req
             if pct > 1: pct = 1
             pygame.draw.rect(screen, (0,0,0), (self.rect.x + 5, self.rect.y - 10, 30, 5))

@@ -11,11 +11,13 @@ if os.path.exists('gamedata.json'):
         pass
 
 class UIManager:
-    def __init__(self, order_manager):
+    def __init__(self, order_manager, game=None):
         self.order_manager = order_manager
         self.font = pygame.font.SysFont("Arial", 20, bold=True)
         self.small_font = pygame.font.SysFont("Arial", 14)
         self.info_font = pygame.font.SysFont("Arial", 18)
+        self.large_font = pygame.font.SysFont("Arial", 48, bold=True)
+        self.game = game
         
         # UI Area Height (Must match game.py)
         self.height = 120 
@@ -27,6 +29,11 @@ class UIManager:
         
         self.draw_score(screen)
         self.draw_tickets(screen)
+        self.draw_timer(screen)
+        
+        if self.game and self.game.game_over:
+            self.draw_game_over(screen)
+
 
     def draw_selection_info(self, screen, obj, screen_h):
         # Determine name logic
@@ -68,15 +75,91 @@ class UIManager:
         screen.blit(text_surf, rect)
 
     def draw_score(self, screen):
-        score_text = f"Score: {self.order_manager.score}"
-        text_surf = self.font.render(score_text, True, (255, 255, 255))
+        text = f"Score: {self.order_manager.score}"
+        
+        if self.game and self.game.game_mode == "order_limit":
+            goal = self.game.game_config.get("order_goal", 20)
+            completed = self.order_manager.orders_completed
+            left = max(0, goal - completed)
+            text = f"Orders Left: {left}"
+        elif self.game and self.game.game_mode == "endless":
+            # Just show score, no extra text
+            pass
+            
+        text_surf = self.font.render(text, True, (255, 255, 255))
         
         x_pos = screen.get_width() - 150
         y_pos = 40
         
-        pygame.draw.rect(screen, (0,0,0), (x_pos, y_pos, 130, 40))
-        pygame.draw.rect(screen, (255, 255, 255), (x_pos, y_pos, 130, 40), 2)
+        # Adjust width if needed for longer text? 130 should be okay for "Orders Left: 99"
+        # "Score: 9999" is roughly same width.
+        
+        pygame.draw.rect(screen, (0,0,0), (x_pos, y_pos, 150, 40)) # Slightly wider for "Orders Left"
+        pygame.draw.rect(screen, (255, 255, 255), (x_pos, y_pos, 150, 40), 2)
         screen.blit(text_surf, (x_pos + 10, y_pos + 8))
+
+    def draw_timer(self, screen):
+        if not self.game: return
+        
+        minutes = int(self.game.game_timer // 60)
+        seconds = int(self.game.game_timer % 60)
+        time_text = f"{minutes:02}:{seconds:02}"
+        
+        color = (255, 255, 255)
+        if self.game.game_mode == "time_limit" and self.game.game_timer < 30:
+            color = (255, 50, 50) # Red warning
+        elif self.game.game_mode == "endless":
+            color = (255, 255, 255) # Always white for endless
+            
+        text_surf = self.font.render(time_text, True, color)
+        
+        # Position below score
+        # Score is at: x = screen.get_width() - 150, y = 40, w = 150, h = 40
+        score_x = screen.get_width() - 150
+        score_y = 40
+        score_w = 150
+        score_h = 40
+        
+        # Center timer below score
+        timer_x = score_x + (score_w // 2)
+        timer_y = score_y + score_h + 15
+        
+        rect = text_surf.get_rect(center=(timer_x, timer_y))
+        
+        # BG
+        bg_rect = rect.inflate(20, 10)
+        pygame.draw.rect(screen, (0, 0, 0), bg_rect)
+        pygame.draw.rect(screen, (255, 255, 255), bg_rect, 2)
+        screen.blit(text_surf, rect)
+        
+        # If Order Limit, show goal
+        if self.game.game_mode == "order_limit":
+             goal = self.game.game_config.get("order_goal", 20)
+             curr = self.order_manager.orders_completed
+             goal_text = f"{curr} / {goal}"
+             goal_surf = self.small_font.render(goal_text, True, (200, 200, 200))
+             screen.blit(goal_surf, (bg_rect.centerx - goal_surf.get_width()//2, bg_rect.bottom + 5))
+
+    def draw_game_over(self, screen):
+        w, h = screen.get_width(), screen.get_height()
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
+        
+        msg = "LEVEL COMPLETE!"
+        color = (0, 255, 0)
+        
+        text_surf = self.large_font.render(msg, True, color)
+        rect = text_surf.get_rect(center=(w // 2, h // 2 - 50))
+        screen.blit(text_surf, rect)
+        
+        # Score / Stars logic could go here
+        score = self.order_manager.score
+        score_text = self.font.render(f"Final Score: {score}", True, (255, 255, 255))
+        screen.blit(score_text, score_text.get_rect(center=(w // 2, h // 2 + 10)))
+        
+        hint = self.small_font.render("Press ESC to Quit", True, (200, 200, 200))
+        screen.blit(hint, hint.get_rect(center=(w // 2, h // 2 + 50)))
 
     def draw_tickets(self, screen):
         start_x = 20

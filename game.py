@@ -35,6 +35,14 @@ class Game:
         self.selected_object = None
         player_spawn_pos = (100, 300)
         level_recipes_data = {} 
+        self.game_config = {}
+        self.game_over = False
+        self.game_won = False
+        self.game_timer = 0
+        self.game_time_limit = 0
+        self.elapsed_time = 0
+        self.start_ticks = pygame.time.get_ticks()
+        
         if os.path.exists(self.level_path):
             print(f"Loading map from {self.level_path}...")
             try:
@@ -45,6 +53,22 @@ class Game:
                 else:
                     object_list = data.get("objects", [])
                     level_recipes_data = data.get("recipes", {})
+                    self.game_config = data.get("config", {
+                        "mode": "time_limit", 
+                        "time_limit": 180, 
+                        "star_thresholds": [100, 300, 500]
+                    })
+                
+                # Init Game State based on config
+                self.game_mode = self.game_config.get("mode", "time_limit")
+                if self.game_mode == "time_limit":
+                    self.game_time_limit = self.game_config.get("time_limit", 180)
+                    self.game_timer = self.game_time_limit
+                elif self.game_mode == "endless":
+                    self.game_timer = 0
+                else: 
+                    self.game_timer = 0 # Count up default or unknown
+
                 # Load Game Data for Dynamic Containers
                 valid_containers = ["plate"]
                 if os.path.exists('gamedata.json'):
@@ -90,12 +114,18 @@ class Game:
         self.player = Player(player_spawn_pos[0], player_spawn_pos[1])
         self.all_sprites.add(self.player)
         self.order_manager = OrderManager(level_recipes_data)
-        self.ui_manager = UIManager(self.order_manager)
+        self.ui_manager = UIManager(self.order_manager, self)
 
     def run(self):
         while self.running:
             self.events()
-            self.update()
+            if not self.game_over:
+                self.update()
+            else:
+                # Still allow UI updates or just freeze? 
+                # For now, freeze game logic but allow basic events
+                pass 
+                
             self.draw()
             self.clock.tick(60)
 
@@ -152,6 +182,25 @@ class Game:
                         elif isinstance(target, PhysicsEntity): self.player.pickup(target)
 
     def update(self):
+        # --- GAME LOGIC ---
+        dt = 1.0 / 60.0 # Aproximated for logic updates if needed
+        
+        if self.game_mode == "time_limit":
+            self.game_timer -= dt
+            if self.game_timer <= 0:
+                self.game_timer = 0
+                self.game_over = True
+                self.check_win_condition()
+        elif self.game_mode == "endless":
+            self.game_timer += dt
+            # No game over condition for endless mode
+        else:
+            self.game_timer += dt
+            # Check custom order limit condition every frame or let it trigger?
+            if self.order_manager.orders_completed >= self.game_config.get("order_goal", 20):
+                self.game_over = True
+                self.check_win_condition()
+
         keys = pygame.key.get_pressed()
         self.player.update(keys, self.walls)
         self.items.update(self.walls)
@@ -207,3 +256,10 @@ class Game:
         if self.selected_object:
             self.ui_manager.draw_selection_info(self.screen, self.selected_object, self.screen_height)
         pygame.display.flip()
+
+    def check_win_condition(self):
+        self.game_won = True # Default to "Finished"
+        # You could implement logic here to say "Defeat" if score is 0, but for now
+        # Time limit always ends in a "Finish", stars determine quality.
+        print(f"GAME OVER! Mode: {self.game_mode}, Score: {self.order_manager.score}")
+
