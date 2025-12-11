@@ -63,6 +63,7 @@ class DarkLevelEditor:
         # Tabs
         self.setup_ingredient_tab()
         self.setup_recipe_tab()
+        self.setup_container_tab()
         self.setup_level_tab()
 
         # Temporary Color Storage
@@ -228,7 +229,86 @@ class DarkLevelEditor:
         save_btn = tk.Button(content, text="SAVE RECIPE", bg=ACCENT_COLOR, fg="white", font=("Arial", 10, "bold"), relief="flat", command=self.save_recipe)
         save_btn.pack(pady=10, fill="x", padx=20)
 
-    # --- TAB 3: LEVEL CONFIG (UPDATED) ---
+    # --- TAB 3: CONTAINERS ---
+    def setup_container_tab(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="  Containers  ")
+        
+        paned = ttk.PanedWindow(frame, orient="horizontal")
+        paned.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Side List
+        side = ttk.Frame(paned, width=200)
+        ttk.Label(side, text="Containers", font=("Arial", 12, "bold")).pack(pady=5)
+        self.cont_listbox = tk.Listbox(side, bg=ENTRY_BG, fg=FG_COLOR, bd=0, highlightthickness=0, selectbackground=ACCENT_COLOR)
+        self.cont_listbox.pack(fill="both", expand=True)
+        self.cont_listbox.bind("<<ListboxSelect>>", self.on_cont_select)
+        ttk.Button(side, text="+ Create New", command=self.clear_container_form).pack(fill="x", pady=5)
+        paned.add(side, weight=1)
+        
+        # Form
+        content = ttk.Frame(paned)
+        paned.add(content, weight=3)
+        
+        self.lbl_cont_header = ttk.Label(content, text="Creating New Container", font=("Arial", 14, "bold"))
+        self.lbl_cont_header.pack(pady=10)
+        
+        grid = ttk.Frame(content)
+        grid.pack(fill="x", padx=20)
+        
+        ttk.Label(grid, text="Name:").grid(row=0, column=0, sticky="w", pady=5)
+        self.var_cont_name = tk.StringVar()
+        ttk.Entry(grid, textvariable=self.var_cont_name).grid(row=0, column=1, sticky="ew", padx=10)
+        
+        ttk.Label(grid, text="Visual Type:").grid(row=1, column=0, sticky="w", pady=5)
+        self.var_cont_visual = tk.StringVar(value="pot")
+        ttk.Combobox(grid, textvariable=self.var_cont_visual, values=["pot", "pan"], state="readonly").grid(row=1, column=1, sticky="ew", padx=10)
+        
+        ttk.Label(grid, text="Min Items:").grid(row=2, column=0, sticky="w", pady=5)
+        self.var_cont_min = tk.IntVar(value=1)
+        ttk.Entry(grid, textvariable=self.var_cont_min).grid(row=2, column=1, sticky="ew", padx=10)
+        
+        ttk.Label(grid, text="Max Items:").grid(row=3, column=0, sticky="w", pady=5)
+        self.var_cont_max = tk.IntVar(value=3)
+        ttk.Entry(grid, textvariable=self.var_cont_max).grid(row=3, column=1, sticky="ew", padx=10)
+        
+        save_btn = tk.Button(content, text="SAVE CONTAINER", bg=ACCENT_COLOR, fg="white", font=("Arial", 10, "bold"), relief="flat", command=self.save_container)
+        save_btn.pack(pady=20, fill="x", padx=20)
+
+    def on_cont_select(self, event):
+        sel = self.cont_listbox.curselection()
+        if not sel: return
+        name = self.cont_listbox.get(sel[0])
+        data = self.data.get("containers", {}).get(name, {})
+        self.lbl_cont_header.config(text=f"Editing: {name}")
+        self.var_cont_name.set(name)
+        self.var_cont_visual.set(data.get("visual_type", "pot"))
+        self.var_cont_min.set(data.get("min_items", 1))
+        self.var_cont_max.set(data.get("max_items", 1))
+
+    def clear_container_form(self):
+        self.lbl_cont_header.config(text="Creating New Container")
+        self.var_cont_name.set("")
+        self.var_cont_visual.set("pot")
+        self.var_cont_min.set(1)
+        self.var_cont_max.set(3)
+        self.cont_listbox.selection_clear(0, tk.END)
+
+    def save_container(self):
+        name = self.var_cont_name.get().strip().lower()
+        if not name: return
+        
+        if "containers" not in self.data: self.data["containers"] = {}
+        
+        self.data["containers"][name] = {
+            "visual_type": self.var_cont_visual.get(),
+            "min_items": self.var_cont_min.get(),
+            "max_items": self.var_cont_max.get()
+        }
+        self.save_json(DATA_FILE, self.data)
+        self.refresh_ui()
+
+    # --- TAB 4: LEVEL CONFIG (UPDATED) ---
     def setup_level_tab(self):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="  Level Config  ")
@@ -307,6 +387,11 @@ class DarkLevelEditor:
         recs = sorted(self.data["recipes"].keys())
         self.rec_listbox.delete(0, tk.END)
         for r in recs: self.rec_listbox.insert(tk.END, r)
+
+        conts = sorted(self.data.get("containers", {}).keys())
+        if hasattr(self, "cont_listbox"):
+            self.cont_listbox.delete(0, tk.END)
+            for c in conts: self.cont_listbox.insert(tk.END, c)
 
         # 2. Update Level Rows
         self.refresh_level_rows_only()

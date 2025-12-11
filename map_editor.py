@@ -26,8 +26,7 @@ OBJECT_TYPES = [
     {"name": "Serving", "color": (100, 100, 100), "type_id": "serving_counter", "layer": 0},
     {"name": "Crate", "color": (150, 150, 100), "type_id": "crate", "layer": 0}, 
     {"name": "Plate", "color": (255, 255, 255), "type_id": "plate", "layer": 1},
-    {"name": "Pot", "color": (80, 80, 80), "type_id": "pot", "layer": 1},
-    {"name": "Pan", "color": (20, 20, 20), "type_id": "pan", "layer": 1},
+    {"name": "Container", "color": (80, 80, 80), "type_id": "container", "layer": 1},
     {"name": "Spawn", "color": (0, 255, 0), "type_id": "spawn_point", "layer": 1}, 
 ]
 
@@ -38,6 +37,14 @@ def load_ingredient_list():
             data = json.load(f)
             return list(data.get("ingredients", {}).keys())
     except: return ["onion", "tomato"]
+
+def load_container_list():
+    if not os.path.exists(DATA_FILE): return ["pot", "pan"]
+    try:
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+            return list(data.get("containers", {}).keys())
+    except: return ["pot", "pan"]
 
 class MapEditor:
     def __init__(self):
@@ -52,11 +59,13 @@ class MapEditor:
         self.furniture_layer = {} 
         self.item_layer = {}      
         self.available_ingredients = load_ingredient_list()
+        self.container_types = load_container_list()
 
         self.show_popup = False
         self.popup_target_pos = None 
         self.popup_rect = pygame.Rect(200, 100, 400, 400)
-        self.option_rects = [] 
+        self.option_rects = []
+        self.current_popup_items = []
         
         # Current file being edited (for display purposes)
         self.current_file = "Untitled"
@@ -162,11 +171,20 @@ class MapEditor:
                         mx, my = pygame.mouse.get_pos()
                         for i, rect in enumerate(self.option_rects):
                             if rect.collidepoint(mx, my):
-                                choice = self.available_ingredients[i]
+                                choice = self.current_popup_items[i] 
                                 template = OBJECT_TYPES[self.current_idx] 
                                 new_obj = template.copy()
-                                new_obj["args"] = choice
-                                self.furniture_layer[self.popup_target_pos] = new_obj
+                                
+                                if template["type_id"] == "crate":
+                                    new_obj["args"] = choice
+                                    self.furniture_layer[self.popup_target_pos] = new_obj
+                                elif template["type_id"] == "container":
+                                    new_obj["type_id"] = choice # Switch generic to specific
+                                    # Update color based on selection for immediate feedback if we had that mapping
+                                    if choice == "pan": new_obj["color"] = (20, 20, 20)
+                                    else: new_obj["color"] = (80, 80, 80)
+                                    self.item_layer[self.popup_target_pos] = new_obj
+
                                 self.show_popup = False
                                 break
                         if not self.popup_rect.collidepoint(mx, my): self.show_popup = False
@@ -200,10 +218,16 @@ class MapEditor:
                                     if not existing or existing["type_id"] != "crate":
                                         self.show_popup = True
                                         self.popup_target_pos = (grid_x, grid_y)
+                                        self.current_popup_items = self.available_ingredients
                                 else:
                                     self.furniture_layer[(grid_x, grid_y)] = template.copy()
                             elif layer == 1:
-                                self.item_layer[(grid_x, grid_y)] = template.copy()
+                                if template["type_id"] == "container":
+                                    self.show_popup = True
+                                    self.popup_target_pos = (grid_x, grid_y)
+                                    self.current_popup_items = self.container_types
+                                else:
+                                    self.item_layer[(grid_x, grid_y)] = template.copy()
 
                         elif mouse_buttons[2]: 
                             if (grid_x, grid_y) in self.item_layer: del self.item_layer[(grid_x, grid_y)]
@@ -253,13 +277,13 @@ class MapEditor:
     def draw_popup(self):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)); overlay.set_alpha(128); overlay.fill((0,0,0)); self.screen.blit(overlay, (0,0))
         pygame.draw.rect(self.screen, POPUP_BG, self.popup_rect); pygame.draw.rect(self.screen, POPUP_BORDER, self.popup_rect, 3)
-        title = self.large_font.render("Select Ingredient", True, WHITE); self.screen.blit(title, (self.popup_rect.x + 20, self.popup_rect.y + 20))
+        title = self.large_font.render("Select Option", True, WHITE); self.screen.blit(title, (self.popup_rect.x + 20, self.popup_rect.y + 20))
         self.option_rects = []; start_y = self.popup_rect.y + 70
-        for i, ing in enumerate(self.available_ingredients):
+        for i, item in enumerate(self.current_popup_items):
             item_rect = pygame.Rect(self.popup_rect.x + 20, start_y + (i * 40), 360, 30); self.option_rects.append(item_rect)
             mx, my = pygame.mouse.get_pos(); color = BLUE if item_rect.collidepoint(mx, my) else (80, 80, 80)
             pygame.draw.rect(self.screen, color, item_rect); pygame.draw.rect(self.screen, WHITE, item_rect, 1)
-            text = self.font.render(ing.capitalize(), True, WHITE); self.screen.blit(text, (item_rect.x + 10, item_rect.y + 5))
+            text = self.font.render(item.capitalize(), True, WHITE); self.screen.blit(text, (item_rect.x + 10, item_rect.y + 5))
 
 if __name__ == "__main__":
     editor = MapEditor()

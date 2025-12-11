@@ -43,11 +43,20 @@ class PhysicsEntity(pygame.sprite.Sprite):
                 if target.held_item is None:
                     self.snap_to_counter(target)
 
+    # --- VISUAL METHODS ---
+    def highlight(self):
+        pygame.draw.rect(self.image, (255, 255, 100), (0, 0, self.rect.width, self.rect.height), 2)
+
+    def reset(self):
+        self.redraw()
+
+    def redraw(self):
+        pass
+
 class Ingredient(PhysicsEntity):
     def __init__(self, name, x, y):
         self.name = name
         
-        # Load stats
         data = GAME_DATA.get("ingredients", {}).get(name, {})
         self.colors = {
             "raw": tuple(data.get("color_raw", (255, 165, 0))),
@@ -63,24 +72,25 @@ class Ingredient(PhysicsEntity):
         self.progress = 0
         
         self.image = pygame.Surface((20, 20))
-        self.image.fill(self.colors["raw"])
         
         # Init physics
         super().__init__(x, y)
+        self.redraw() # Draw AFTER init
+
+    def redraw(self):
+        color = self.colors.get(self.state, (255, 255, 255))
+        self.image.fill(color)
+        
+        if self.state == "chopped":
+            pygame.draw.line(self.image, (255, 255, 255), (10, 0), (10, 20), 2)
 
     def chop_tick(self):
         if self.state == "raw":
             self.progress += 1
-            if self.progress % 10 == 0:
-                print(f"DEBUG: Chopping... {self.progress}/{self.prepare_time}")
-            
             if self.progress >= self.prepare_time:
                 self.state = "chopped"
                 self.progress = 0
-                self.image.fill(self.colors["chopped"])
-                pygame.draw.line(self.image, (255, 255, 255), (10, 0), (10, 20), 2)
-        else:
-            pass
+                self.redraw()
 
     def cook_tick(self):
         if self.state == "chopped":
@@ -88,48 +98,34 @@ class Ingredient(PhysicsEntity):
             if self.progress >= self.cook_time:
                 self.state = "cooked"
                 self.progress = 0 
-                self.image.fill(self.colors["cooked"])
+                self.redraw()
         elif self.state == "cooked":
             self.progress += 1
             if self.progress >= self.burn_time:
                 self.state = "burnt"
-                self.image.fill(self.colors["burnt"])
+                self.redraw()
 
     def update(self, walls):
-        """
-        Custom update for Ingredients to handle 'Pot Shots'
-        """
+        super().update(walls)
         if self.physics_state == "FLYING":
-            self.rect.x += self.velocity.x
-            self.rect.y += self.velocity.y
-            
-            # 1. Check Collision with Walls (Counters)
             hits = pygame.sprite.spritecollide(self, walls, False)
             if hits:
                 target_counter = hits[0]
-                
-                # SPECIAL CHECK: Is there a CONTAINER (Pot/Pan) on this counter?
                 if target_counter.held_item and hasattr(target_counter.held_item, "add_ingredient"):
                     container = target_counter.held_item
-                    # Try to add myself to the container
                     if container.add_ingredient(self):
-                        print(f"DEBUG: KOBE! Threw {self.name} into container!")
-                        self.kill() # Delete the flying sprite
-                        return # Stop processing
+                        self.kill() 
+                        return 
 
-                # Normal Landing (if counter is empty)
-                elif target_counter.held_item is None:
-                    self.snap_to_counter(target_counter)
-
-# --- CONTAINERS (Pots/Pans/Plates) ---
+# --- CONTAINERS ---
 
 class Container(PhysicsEntity):
     def __init__(self, name, x, y):
         self.name = name
-        self.contents = [] # List of strings (ingredient names)
+        self.contents = [] 
         super().__init__(x, y)
         
-        # Shared Stats
+        # Variables used by redraw()
         self.cooking_progress = 0
         self.cook_time_req = 100
         self.is_cooking = False
@@ -138,187 +134,197 @@ class Container(PhysicsEntity):
         self.burn_limit = 600
         self.is_burnt = False
 
-class Pot(Container):
-    def __init__(self, x, y):
-        self.image = pygame.Surface((30, 30))
-        self.image.fill((50, 50, 50)) # Dark Grey
-        pygame.draw.rect(self.image, (30,30,30), (0, 10, 30, 10)) 
+class CookingContainer(Container):
+    def __init__(self, name, x, y):
+        # 1. Load Data
+        data = GAME_DATA.get("containers", {}).get(name, {})
+        self.min_items = data.get("min_items", 1)
+        self.max_items = data.get("max_items", 3)
+        self.visual_type = data.get("visual_type", name)
         
-        super().__init__("pot", x, y)
-        self.cook_time_req = 500
-
-    def add_ingredient(self, ingredient):
-        if self.is_burnt: return False
-
-        # --- VALIDATION: Check if this item belongs in a POT ---
-        ing_data = GAME_DATA.get("ingredients", {}).get(ingredient.name, {})
-        allowed_container = ing_data.get("container_type", "pot") 
-        if allowed_container != "pot":
-            print(f"DEBUG: {ingredient.name} belongs in a {allowed_container}, not a Pot!")
-            return False
-
-        if ingredient.state == "chopped":
-            current_count = len(self.contents)
-            
-            # Weighted Average Logic
-            if current_count > 0 and self.cooking_progress > 0:
-                total_heat = self.cooking_progress * current_count
-                self.cooking_progress = int(total_heat / (current_count + 1))
-                
-                if self.food_ready:
-                    print("DEBUG: Pot rescued from burning!")
-                    self.food_ready = False
-                    self.burn_progress = 0 
-                    self.image.fill((50, 50, 50)) 
-
-            self.contents.append(ingredient.name)
-            print(f"DEBUG: Added {ingredient.name} to Pot. Total: {len(self.contents)}")
-            return True
-        else:
-            print("DEBUG: Must chop ingredient first!")
-            return False
-
-    def cook_tick(self):
-        if self.is_burnt: return
-
-        # 1. Cook if ANY items are inside
-        if len(self.contents) > 0 and not self.food_ready:
-            self.is_cooking = True
-            self.cooking_progress += 1
-            
-            if self.cooking_progress >= self.cook_time_req:
-                if len(self.contents) >= 3:
-                    self.food_ready = True
-                    self.is_cooking = False
-                    self.image.fill((160, 82, 45)) # Soup Color
-                    print("DEBUG: SOUP IS READY!")
-                else:
-                    self.cooking_progress = self.cook_time_req
-
-        # 2. Burn if left too long
-        elif self.food_ready:
-            self.burn_progress += 1
-            if self.burn_progress >= self.burn_limit:
-                self.is_burnt = True
-                self.food_ready = False
-                self.contents = ["burnt_sludge"]
-                self.image.fill((20, 20, 20)) 
-                print("DEBUG: POT BURNED!")
-
-        elif len(self.contents) == 0:
-             self.is_cooking = False
-             self.cooking_progress = 0
-
-class Pan(Container):
-    def __init__(self, x, y):
         self.image = pygame.Surface((30, 30))
-        self.image.fill((20, 20, 20)) # Black Pan
-        pygame.draw.line(self.image, (60, 60, 60), (15, 30), (15, 0), 4) 
-        super().__init__("pan", x, y)
-        self.cook_time_req = 300 
-
-    def add_ingredient(self, ingredient):
-        if self.is_burnt: return False
-        if len(self.contents) >= 1: 
-            print("DEBUG: Pan is full!")
-            return False
-
-        # --- VALIDATION: Check if this item belongs in a PAN ---
-        ing_data = GAME_DATA.get("ingredients", {}).get(ingredient.name, {})
-        allowed_container = ing_data.get("container_type", "pot") 
-        if allowed_container != "pan":
-            print(f"DEBUG: {ingredient.name} belongs in a {allowed_container}, not a Pan!")
-            return False
-
-        if ingredient.state == "chopped":
-            self.contents.append(ingredient.name)
-            return True
-        else:
-            print("DEBUG: Must chop ingredient first!")
-            return False
-
-    def cook_tick(self):
-        if self.is_burnt: return
-
-        # 1. Cooking
-        if len(self.contents) == 1 and not self.food_ready:
-            self.is_cooking = True
-            self.cooking_progress += 1
-            
-            if self.cooking_progress >= self.cook_time_req:
-                self.food_ready = True
-                self.is_cooking = False
-                # Visual change
-                pygame.draw.circle(self.image, (139, 69, 19), (15, 15), 10)
         
-        # 2. Burning
-        elif self.food_ready:
-            self.burn_progress += 1
-            if self.burn_progress >= self.burn_limit:
-                self.is_burnt = True
-                self.food_ready = False
-                self.contents = ["burnt_sludge"]
-                self.image.fill((0, 0, 0)) # Charred
+        # 2. Init Parent
+        super().__init__(name, x, y)
+        
+        # 3. Draw
+        self.redraw()
 
-        elif len(self.contents) == 0:
-            self.is_cooking = False
-            self.cooking_progress = 0
-            # Reset visual
+    def redraw(self):
+        # Generic background
+        if self.visual_type == "pot":
+            self.image.fill((50, 50, 50)) 
+            pygame.draw.rect(self.image, (30,30,30), (0, 10, 30, 10))
+            if self.food_ready:
+                self.image.fill((160, 82, 45)) # Soup Color
+        elif self.visual_type == "pan":
             self.image.fill((20, 20, 20)) 
             pygame.draw.line(self.image, (60, 60, 60), (15, 30), (15, 0), 4)
+            if self.food_ready:
+                pygame.draw.circle(self.image, (139, 69, 19), (15, 15), 10)
+        else:
+            self.image.fill((100, 100, 100)) # Default/Wok?
+            
+        if self.is_burnt:
+             self.image.fill((0, 0, 0))
+
+    def add_ingredient(self, ingredient):
+        if self.is_burnt: return False
+        
+        # Check if ingredient allows this container
+        ing_data = GAME_DATA.get("ingredients", {}).get(ingredient.name, {})
+        allowed = ing_data.get("container_type", "pot")
+        # For compatibility: if visual_type matches the allowed type 
+        # (e.g. visual_type "pot" accepts things marked for "pot")
+        # Custom Fix: Allow generic "container" to hold anything
+        if allowed != self.visual_type and self.visual_type != "container": return False
+
+        if ingredient.state == "chopped":
+            if len(self.contents) < self.max_items:
+                # Reset if we add stuff while cooking (basic logic)
+                if self.cooking_progress > 0:
+                     self.cooking_progress = 0
+                     self.is_cooking = False
+                
+                self.contents.append(ingredient.name)
+                return True
+        return False
+
+    def get_cook_requirements(self):
+        """
+        Returns (time_req, burn_req, is_complete)
+        """
+        current_content_sorted = sorted(self.contents)
+        
+        # 1. Check Recipes (including partials)
+        best_match = None
+        
+        for r_name, r_data in GAME_DATA.get("recipes", {}).items():
+            req_ings = sorted(r_data.get("ingredients", []))
+            req_cont = r_data.get("container", "pot")
+            
+            # Must match container type
+            if req_cont == self.visual_type or self.visual_type == "container":
+                # Check for Exact Match
+                if current_content_sorted == req_ings:
+                    return r_data.get("cook_time", 500), 600, True
+                
+                # Check for Partial Match (Subset)
+                # Naive subset check for lists with duplicates
+                # We need to check if current_content is a subset of req_ings
+                # E.g. [onion, onion] is subset of [onion, onion, onion]
+                temp_req = req_ings.copy()
+                is_subset = True
+                for item in current_content_sorted:
+                    if item in temp_req:
+                        temp_req.remove(item)
+                    else:
+                        is_subset = False
+                        break
+                
+                if is_subset and len(self.contents) > 0:
+                    # Found a potential recipe we are working towards
+                    # Use this recipe's times
+                    best_match = (r_data.get("cook_time", 500), 600, False)
+        
+        if best_match:
+            return best_match
+
+        # 2. Check Single Ingredients (e.g. Hamburger in Pan)
+        if len(self.contents) == 1:
+            ing_name = self.contents[0]
+            ing_data = GAME_DATA.get("ingredients", {}).get(ing_name, {})
+            # Default to "pot" if undefined, handling the old onion case if needed
+            req_cont = ing_data.get("container_type", "pot")
+            
+            if req_cont == self.visual_type or self.visual_type == "container":
+                 return ing_data.get("cook_time", 200), ing_data.get("burn_time", 300), True
+                 
+        return None, None, False
+
+    def cook_tick(self):
+        if self.is_burnt: return
+        
+        cook_time, burn_time, is_complete = self.get_cook_requirements()
+        
+        if cook_time:
+            # Cook if we have valid contents (even partial)
+            if not self.food_ready:
+                self.is_cooking = True
+                self.cooking_progress += 1
+                self.cook_time_req = cook_time 
+                
+                if self.cooking_progress >= cook_time:
+                    if is_complete and len(self.contents) >= self.min_items:
+                        self.food_ready = True
+                        self.is_cooking = False
+                        self.burn_limit = burn_time
+                        self.redraw()
+                    else:
+                        # Cap progress if not complete
+                        self.cooking_progress = cook_time
+            else:
+                 # Burn logic
+                 self.burn_progress += 1
+                 if self.burn_progress >= self.burn_limit:
+                     self.is_burnt = True
+                     self.food_ready = False
+                     self.contents = ["burnt_sludge"]
+                     self.redraw()
+        else:
+            self.is_cooking = False
+            self.cooking_progress = 0
 
 class Plate(Container):
     def __init__(self, x, y):
         self.image = pygame.Surface((30, 30))
         self.font = pygame.font.SysFont("Arial", 20, bold=True)
+        
+        # 1. Initialize Parent FIRST
         super().__init__("plate", x, y)
         
+        # 2. Plate Stats
         self.is_dirty = False
         self.stack_count = 1
         
-        # Initial draw
-        self.redraw_plate()
+        # 3. Draw
+        self.redraw()
 
-    def redraw_plate(self):
-        # Reset canvas
-        self.image.fill((255, 255, 255)) # White
+    def redraw(self):
+        self.image.fill((255, 255, 255)) 
         pygame.draw.circle(self.image, (200, 200, 200), (15, 15), 12, 1)
         
         if self.is_dirty:
-            # Draw smudge
             pygame.draw.circle(self.image, (100, 150, 100), (15, 15), 10)
         elif len(self.contents) > 0:
-            # Draw food
             pygame.draw.circle(self.image, (160, 82, 45), (15, 15), 8)
 
-        # Draw Stack Number
         if self.stack_count > 1:
             pygame.draw.circle(self.image, (255, 0, 0), (22, 8), 8)
             text = self.font.render(str(self.stack_count), True, (255, 255, 255))
             self.image.blit(text, (18, 0))
 
     def add_food(self, content_data):
-        """
-        Accepts either a string (single item) or a list (from pot).
-        """
         if self.is_dirty or self.stack_count > 1: return
-        
-        if isinstance(content_data, list):
-            self.contents.extend(content_data)
-        else:
-            self.contents.append(content_data)
-            
-        self.redraw_plate()
+        if isinstance(content_data, list): self.contents.extend(content_data)
+        else: self.contents.append(content_data)
+        self.redraw()
+
+    def add_ingredient(self, ingredient):
+        if self.is_dirty or self.stack_count > 1 or len(self.contents) > 0:
+            return False
+        self.make_dirty()
+        return True
 
     def make_dirty(self):
         self.is_dirty = True
         self.contents = []
-        self.redraw_plate()
+        self.redraw()
 
     def clean(self):
         self.is_dirty = False
         self.contents = []
-        self.redraw_plate()
+        self.redraw()
 
 # --- STATION OBJECTS ---
 
@@ -371,22 +377,23 @@ class Stove(Counter):
         self.image = self.image_normal
 
     def update(self):
-        # Duck Typing: Cook whatever is on top
         if self.held_item and hasattr(self.held_item, "cook_tick"):
+            # print(f"DEBUG: Stove cooking {self.held_item.name}...") 
             self.held_item.cook_tick()
 
     def draw_progress_bar(self, screen):
         if self.held_item and isinstance(self.held_item, Container):
             container = self.held_item
-            
-            # Draw Green Cooking Bar
+            # print(f"DEBUG: Stove Drawing PB for {container.name}. Cooking: {container.is_cooking}, Prog: {container.cooking_progress}")
             if container.is_cooking or (container.cooking_progress > 0 and not container.food_ready):
                 pct = container.cooking_progress / container.cook_time_req
                 if pct > 1: pct = 1
                 pygame.draw.rect(screen, (0,0,0), (self.rect.x + 5, self.rect.y - 10, 30, 5))
                 pygame.draw.rect(screen, (0, 255, 0), (self.rect.x + 5, self.rect.y - 10, 30 * pct, 5))
-            
-            # Draw Red Burning Bar
+                pct = container.cooking_progress / container.cook_time_req
+                if pct > 1: pct = 1
+                pygame.draw.rect(screen, (0,0,0), (self.rect.x + 5, self.rect.y - 10, 30, 5))
+                pygame.draw.rect(screen, (0, 255, 0), (self.rect.x + 5, self.rect.y - 10, 30 * pct, 5))
             elif container.food_ready and not container.is_burnt:
                 pct = container.burn_progress / container.burn_limit
                 if pct > 1: pct = 1
@@ -399,39 +406,29 @@ class Stove(Counter):
 class ServingCounter(Counter):
     def __init__(self, x, y):
         super().__init__(x, y)
-        
-        # Visuals: Finish Line
         self.image_normal.fill((50, 50, 50)) 
         pygame.draw.rect(self.image_normal, (200, 200, 200), (0, 0, 20, 20))
         pygame.draw.rect(self.image_normal, (200, 200, 200), (20, 20, 20, 20))
-        
         self.image_highlight = self.image_normal.copy()
         pygame.draw.rect(self.image_highlight, (255, 255, 100), (0, 0, 40, 40), 2)
         self.image = self.image_normal
-        
         self.pending_returns = []
 
     def serve_plate(self):
-        # 5-10 seconds for debug (300-600 frames)
         return_time = random.randint(300, 600) 
         self.pending_returns.append(return_time)
         print(f"DEBUG: Plate served! Returns in {return_time} frames.")
 
     def update(self, items_group=None, all_sprites=None):
         if items_group is None: return
-
         for i in range(len(self.pending_returns) - 1, -1, -1):
             self.pending_returns[i] -= 1
-            
             if self.pending_returns[i] <= 0:
-                # Timer done! Try to spawn dirty plate
                 if self.held_item is None:
                     self.pending_returns.pop(i)
-                    
                     plate = Plate(0, 0)
                     plate.make_dirty()
                     plate.snap_to_counter(self)
-                    
                     items_group.add(plate)
                     all_sprites.add(plate)
                     print("DEBUG: Dirty plate returned!")
@@ -441,13 +438,11 @@ class Sink(Counter):
         super().__init__(x, y)
         self.image_normal.fill((100, 100, 100)) # Metal
         pygame.draw.rect(self.image_normal, (50, 150, 255), (5, 5, 30, 30)) # Water
-        
         self.image_highlight = self.image_normal.copy()
         pygame.draw.rect(self.image_highlight, (255, 255, 100), (0, 0, 40, 40), 2)
         self.image = self.image_normal
-        
         self.wash_progress = 0
-        self.wash_time_req = 150 # Frames to wash one plate
+        self.wash_time_req = 150 
 
     def interact_hold(self):
         if self.held_item and isinstance(self.held_item, Plate):
@@ -456,7 +451,6 @@ class Sink(Counter):
                 self.wash_progress += 1
                 if self.wash_progress >= self.wash_time_req:
                     self.wash_progress = 0
-                    
                     if plate.stack_count > 1:
                         plate.stack_count -= 1
                         plate.redraw_plate()
@@ -479,7 +473,6 @@ class Crate(Counter):
         self.ingredient_name = ingredient_name
         data = GAME_DATA.get("ingredients", {}).get(ingredient_name, {})
         base_color = tuple(data.get("crate_color", (100, 100, 100))) 
-        
         self.image_normal = pygame.Surface((40, 40))
         self.image_normal.fill(base_color)
         border_col = (50, 30, 10)
@@ -487,10 +480,8 @@ class Crate(Counter):
         pygame.draw.line(self.image_normal, border_col, (0, 10), (40, 10), 2)
         pygame.draw.line(self.image_normal, border_col, (0, 20), (40, 20), 2)
         pygame.draw.line(self.image_normal, border_col, (0, 30), (40, 30), 2)
-        
         icon_color = tuple(data.get("color_raw", (255, 255, 255)))
         pygame.draw.rect(self.image_normal, icon_color, (15, 15, 10, 10))
-
         self.image_highlight = self.image_normal.copy()
         pygame.draw.rect(self.image_highlight, (255, 255, 100), (0, 0, 40, 40), 2)
         self.image = self.image_normal
