@@ -1,4 +1,5 @@
 import pygame
+import controls
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -16,10 +17,10 @@ class Player(pygame.sprite.Sprite):
         move_y = 0
         
         # --- Movement Logic ---
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        if controls.manager.is_active("move_left", keys):
             move_x = -self.speed
             self.facing = pygame.math.Vector2(-1, 0)
-        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        elif controls.manager.is_active("move_right", keys):
             move_x = self.speed
             self.facing = pygame.math.Vector2(1, 0)
             
@@ -29,10 +30,10 @@ class Player(pygame.sprite.Sprite):
             if move_x > 0: self.rect.right = wall.rect.left
             elif move_x < 0: self.rect.left = wall.rect.right
 
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
+        if controls.manager.is_active("move_up", keys):
             move_y = -self.speed
             self.facing = pygame.math.Vector2(0, -1)
-        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        elif controls.manager.is_active("move_down", keys):
             move_y = self.speed
             self.facing = pygame.math.Vector2(0, 1)
             

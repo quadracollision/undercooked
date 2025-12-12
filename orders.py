@@ -4,13 +4,16 @@ import json
 import os
 
 # Load Data
-GAME_DATA = {}
-if os.path.exists('gamedata.json'):
-    try:
-        with open('gamedata.json', 'r') as f:
-            GAME_DATA = json.load(f)
-    except:
-        print("Error loading JSON in orders.py")
+def load_game_data():
+    if os.path.exists('gamedata.json'):
+        try:
+            with open('gamedata.json', 'r') as f:
+                return json.load(f)
+        except:
+            print("Error loading JSON in orders.py")
+    return {}
+
+GAME_DATA = load_game_data()
 
 class Order:
     def __init__(self, recipe_name, duration):
@@ -30,6 +33,10 @@ class Order:
 
 class OrderManager:
     def __init__(self, level_config_recipes=None):
+        # Refresh Global Data to handle hot-reloads from Editor
+        global GAME_DATA
+        GAME_DATA = load_game_data()
+
         self.orders = []
         self.score = 0
         self.orders_completed = 0

@@ -121,6 +121,47 @@
                 155,
                 100
             ]
+        },
+        "burger bun": {
+            "container_type": "pot",
+            "prepare_time": 100,
+            "cook_time": 100,
+            "burn_time": 100,
+            "color_raw": [
+                255,
+                165,
+                0
+            ],
+            "color_chopped": [
+                200,
+                200,
+                200
+            ],
+            "color_cooked": [
+                150,
+                100,
+                50
+            ],
+            "color_burnt": [
+                50,
+                50,
+                50
+            ],
+            "crate_color": [
+                100,
+                100,
+                100
+            ],
+            "proc_color": [
+                50,
+                50,
+                50
+            ],
+            "proc_pb_color": [
+                0,
+                255,
+                0
+            ]
         }
     },
     "recipes": {
@@ -150,6 +191,25 @@
                 "tomato_chopped",
                 "lettuce_chopped",
                 "onion_chopped"
+            ]
+        },
+        "hamburger": {
+            "ingredients": [
+                "burger bun_chopped",
+                "hamburger",
+                "tomato_chopped",
+                "onion_chopped"
+            ]
+        },
+        "hamburger sandwich": {
+            "ingredients": [
+                "burger bun_chopped",
+                "hamburger"
+            ]
+        },
+        "humbubgas": {
+            "ingredients": [
+                "hamburger"
             ]
         }
     },

@@ -6,7 +6,9 @@ from player import Player
 from level import Level
 from objects import Counter, Stove, Ingredient, CookingContainer, Plate, PhysicsEntity, Crate, Container, ServingCounter, Sink, Processor
 from orders import OrderManager
+from orders import OrderManager
 from ui import UIManager
+import controls
 
 # --- VIEWPORT CONSTANTS ---
 GAME_WIDTH = 800
@@ -133,9 +135,9 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: self.running = False; sys.exit()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_x or event.key == pygame.K_ESCAPE: self.running = False; return 
-                if event.key == pygame.K_f: self.player.throw()
-                if event.key == pygame.K_SPACE:
+                if event.key in controls.manager.get_keys("pause"): self.running = False; return 
+                if event.key in controls.manager.get_keys("throw"): self.player.throw()
+                if event.key in controls.manager.get_keys("interact"):
                     held_item = self.player.inventory
                     target = self.selected_object
                     real_target = target
@@ -235,7 +237,7 @@ class Game:
                 self.selected_object = closest_obj
                 self.selected_object.highlight()
 
-        if keys[pygame.K_e]:
+        if controls.manager.is_active("chop", keys):
             if self.selected_object:
                 if isinstance(self.selected_object, Processor) and self.selected_object.requires_interaction:
                     self.selected_object.interact_hold()
